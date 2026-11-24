@@ -11,6 +11,8 @@ Przeglądarkowa gra rajdowa na szutrze w 3D, w klimacie klasycznych rajdówek z 
 
 - **Fizyka rajdowa**: napęd 4×4, poślizgi i kontra, ręczny na nawroty, przenoszenie masy przy hamowaniu, mniejsza przyczepność na poboczu, hopy z prawdziwym lotem.
 - **Pilot**: noty generowane z geometrii trasy („uwaga, prawy jeden i lewy cztery długi, sto”), czytane głosem i pokazane jak w roadbooku.
+- **Trzy auta**: Kometa 4×4 (wszechstronna), Lis RWD (tylny napęd, lekki, chętnie jedzie bokiem, wytrzymały), Iskra FWD (przedni napęd, najzwinniejsza, najsłabsza na prostych, łatwo ją pognieść). Różnią się masą, mocą, napędem, przyczepnością tyłu, zwrotnością, hamulcami i wytrzymałością.
+- **Kibice** za osłonami z bel siana i kamiennymi murkami na wewnętrznej stronie zakrętów i przy hopach. Podskakują, gdy auto przejeżdża.
 - **Przeszkody**: stalowe barierki z tablicami kierunkowymi na części szybkich zakrętów i pojedyncze drzewa tuż przy drodze. Pilot ostrzega: „drzewo na zewnątrz”.
 - **Odcinki**: 4 stałe OS-y i losowy odcinek proceduralny; start z odliczaniem, dwa międzyczasy, rekordy zapisywane w przeglądarce.
 - **Tryb rajdu**: 4 odcinki po kolei, 7 rywali, trzy poziomy trudności, klasyfikacja odcinka i generalna, zapis postępu.
