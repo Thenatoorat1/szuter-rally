@@ -45,10 +45,17 @@ Przeglądarkowa gra rajdowa na szutrze w 3D, w klimacie klasycznych rajdówek z 
 
 Działa też pad (lewa gałka, spusty, X/B ręczny) i dotyk na telefonie.
 
+## Dźwięki
+
+Efekty w folderze `sfx/` wygenerowano w Magnific (ElevenLabs SFX): osobne pętle silnika (niskie i wysokie obroty) dla każdego auta, szuter pod kołami, uderzenia, otarcia o barierkę, lądowanie, strzały z wydechu, doping kibiców, przebicie opony, odpadające części i tło lasu. Gra płynnie przenika pętle silnika i zmienia ich wysokość zależnie od obrotów.
+
+Przeglądarka nie wczyta dźwięków ze strony otwartej bezpośrednio z dysku (`file://`). Gra wtedy działa dalej, tylko z dźwiękiem syntetycznym. Pełny dźwięk masz na GitHub Pages albo z lokalnego serwera: `python3 -m http.server`, potem `http://localhost:8000`.
+
 ## Struktura
 
 - `src/game.html` to źródło gry: fragment strony bez `<html>` i `<head>`, w tej postaci publikowany jako artefakt Claude.
 - `index.html` to samodzielna strona zbudowana z `src/game.html`.
+- `sfx/` to efekty dźwiękowe (mp3). Podmień plik o tej samej nazwie, żeby zmienić dźwięk.
 - `tools/build.py` buduje `index.html`: `python3 tools/build.py`.
 
 Po każdej zmianie w `src/game.html` uruchom build, żeby zaktualizować `index.html`.

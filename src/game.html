@@ -679,7 +679,7 @@ let carMesh=buildCarMesh(CC);scene.add(carMesh.g);
 function selectCar(i){
   CC=CARS[clamp(i|0,0,CARS.length-1)];Object.assign(CAR,CC.phys);
   scene.remove(carMesh.g);for(const o of debris.children.slice())debris.remove(o);debrisList.length=0;
-  carMesh=buildCarMesh(CC);scene.add(carMesh.g);carVis.update(true);store.set('szuter-car',CARS.indexOf(CC));
+  carMesh=buildCarMesh(CC);scene.add(carMesh.g);carVis.update(true);sfx.setCar(CC.id);store.set('szuter-car',CARS.indexOf(CC));
 }
 function freshDamage(){return {engine:0,gearbox:0,susp:0,steer:0,body:0,tyres:[0,0,0,0],zones:{f:0,r:0,l:0,rt:0},dirt:0,pull:Math.random()<.5?-1:1}}
 const car={x:0,z:0,y:0,psi:0,vx:0,vy:0,r:0,vyUp:0,idx:0,s:0,lat:0,gear:1,rpm:900,shift:0,rev:false,revT:0,steer:0,air:false,airT:0,ax:0,ay:0,slip:0,pitch:0,roll:0,wheelRot:0,gPrev:0,misfire:0,D:freshDamage()};
@@ -689,7 +689,7 @@ const PARTS=[['tyres','Opony',4],['steer','Układ kierowniczy',20],['engine','Si
 function partDmg(k){return k==='tyres'?car.D.tyres.reduce((a,b)=>a+b,0)*25:car.D[k]}
 function dmgTotal(){const D=car.D;return Math.min(100,(D.engine+D.gearbox+D.susp+D.steer+D.body)/5+D.tyres.reduce((a,b)=>a+b,0)*8)}
 function addDmg(k,v){car.D[k]=Math.min(100,car.D[k]+v)}
-function puncture(w){const D=car.D;if(D.tyres[w])return;D.tyres[w]=1;toast('Przebita opona!');pilot.say('przebita opona!')}
+function puncture(w){const D=car.D;if(D.tyres[w])return;D.tyres[w]=1;sfx.pop();toast('Przebita opona!');pilot.say('przebita opona!')}
 function impact(lx,lz,v){ // lx,lz: kierunek uderzenia w układzie auta (x = lewo, z = przód)
   const H=Math.max(0,v-3)*1.4*CC.fragile;if(H<=0)return;const D=car.D;
   if(Math.abs(lz)>Math.abs(lx)*1.2){
@@ -714,7 +714,7 @@ const carVis={
     const fx=Math.sin(car.psi),fz=Math.cos(car.psi),lx=Math.cos(car.psi),lz=-Math.sin(car.psi);
     const box=new THREE.Box3().setFromObject(o);
     debrisList.push({o,vx:(fx*car.vx+lx*car.vy)*.55+(Math.random()-.5)*3,vy:2+Math.random()*2,vz:(fz*car.vx+lz*car.vy)*.55+(Math.random()-.5)*3,sp:(Math.random()-.5)*12,floor:car.y+(o.position.y-box.min.y),rest:false});
-    toast('Odpadła część karoserii')},
+    sfx.clatter();toast('Odpadła część karoserii')},
   update(silent){const D=car.D,Z=D.zones,M=carMesh;
     const broken=Z.f>18;for(const l of M.lamps)l.material=broken?M.lampOff:M.lampOn;
     M.cabin.material[4]=(Z.f>30||D.body>65)?M.cracked:M.glass;
@@ -799,7 +799,7 @@ function physStep(dt,ctl){
     const wheelRpm=Math.abs(vx)/(GEAR_TOP[c.gear]*CC.top)*7500;
     c.rpm=Math.max(wheelRpm,c.gear===1?1000+thr*3400*(1-clamp(wheelRpm/4400,0,1)):900);
     if(c.shift>0)c.shift-=dt;
-    else if(c.rpm>7250&&c.gear<5){if(D.gearbox>55&&Math.random()<(D.gearbox-55)*.012)c.shift=.45;else{c.gear++;c.shift=.16+D.gearbox*.005}}
+    else if(c.rpm>7250&&c.gear<5){if(D.gearbox>55&&Math.random()<(D.gearbox-55)*.012)c.shift=.45;else{c.gear++;c.shift=.16+D.gearbox*.005;sfx.shift(thr)}}
     else if(c.gear>1&&c.rpm<3300&&!(thr>.5&&c.rpm>2900)){c.gear--;c.shift=.1+D.gearbox*.003}
     const tq=.72+.28*Math.sin(Math.PI*clamp(c.rpm/8200,0,1));
     drive=c.shift>0||c.rpm>7650||c.misfire>0?0:thr*4300*CC.power*GEAR_MUL[c.gear]*tq*powerK;
@@ -909,7 +909,10 @@ function updDust(dt){
 }
 
 /* ===================== dźwięk ===================== */
-const sfx={ctx:null,on:true,
+// Próbki z Magnific w folderze sfx/. Gdy pliku brak (np. strona otwarta z dysku), gra używa dźwięku syntetycznego.
+const SFX_LIST=['gravel','crash1','crash2','metal1','metal2','land','backfire1','backfire2','crowd1','crowd2','puncture','part','forest',
+  ...CARS.flatMap(c=>['eng_'+c.id+'_lo','eng_'+c.id+'_hi'])];
+const sfx={ctx:null,on:true,buf:{},last:{},car:null,
   init(){if(this.ctx)return;try{const C=window.AudioContext||window.webkitAudioContext;this.ctx=new C()}catch(e){return}
     const x=this.ctx;this.master=x.createGain();this.master.gain.value=this.on?.55:0;this.master.connect(x.destination);
     this.o1=x.createOscillator();this.o1.type='sawtooth';this.o2=x.createOscillator();this.o2.type='square';this.o3=x.createOscillator();this.o3.type='sawtooth';
@@ -919,17 +922,40 @@ const sfx={ctx:null,on:true,
     const len=x.sampleRate*2,buf=x.createBuffer(1,len,x.sampleRate),d=buf.getChannelData(0);for(let i=0;i<len;i++)d[i]=Math.random()*2-1;this.noise=buf;
     this.n=x.createBufferSource();this.n.buffer=buf;this.n.loop=true;this.nf=x.createBiquadFilter();this.nf.type='bandpass';this.nf.frequency.value=900;this.nf.Q.value=.7;this.ng=x.createGain();this.ng.gain.value=0;
     this.n.connect(this.nf).connect(this.ng).connect(this.master);
-    this.o1.start();this.o2.start();this.o3.start();this.n.start()},
+    this.o1.start();this.o2.start();this.o3.start();this.n.start();
+    this.load()},
+  load(){const x=this.ctx;let left=SFX_LIST.length;
+    for(const n of SFX_LIST)fetch('sfx/'+n+'.mp3').then(r=>{if(!r.ok)throw 0;return r.arrayBuffer()}).then(b=>new Promise((ok,no)=>x.decodeAudioData(b,ok,no))).then(b=>{this.buf[n]=b}).catch(()=>{}).finally(()=>{if(--left===0)this.ready()})},
+  ready(){const x=this.ctx;
+    if(this.buf.gravel){this.gv=this.loop('gravel');this.ng.gain.value=0}
+    if(this.buf.forest){this.amb=this.loop('forest');this.amb.g.gain.value=1.6}
+    this.setCar(CC.id)},
+  loop(n){const x=this.ctx,s=x.createBufferSource(),g=x.createGain();s.buffer=this.buf[n];s.loop=true;g.gain.value=0;s.connect(g).connect(this.master);s.start(0,Math.random()*s.buffer.duration);return {s,g}},
+  setCar(id){if(!this.ctx)return;if(this.eng){for(const k of['lo','hi']){try{this.eng[k].s.stop()}catch(e){}}this.eng=null}
+    if(this.buf['eng_'+id+'_lo']&&this.buf['eng_'+id+'_hi'])this.eng={lo:this.loop('eng_'+id+'_lo'),hi:this.loop('eng_'+id+'_hi')}},
   set(on){this.on=on;if(this.master)this.master.gain.setTargetAtTime(on?.55:0,this.ctx.currentTime,.05)},
   update(rpm,thr,slip,spd,ground,active){if(!this.ctx)return;const t=this.ctx.currentTime,f=rpm/60*2;
-    this.o1.frequency.setTargetAtTime(f,t,.03);this.o2.frequency.setTargetAtTime(f*.5,t,.03);this.o3.frequency.setTargetAtTime(f*1.01+1,t,.03);
-    this.f.frequency.setTargetAtTime(300+thr*1800+rpm*.25,t,.05);this.eg.gain.setTargetAtTime(active?(.07+thr*.08):0,t,.05);
-    this.ng.gain.setTargetAtTime(active&&ground?Math.min(.32,spd*.006+slip*.22):0,t,.05);this.nf.frequency.setTargetAtTime(600+spd*12,t,.1)},
+    if(this.eng){this.eg.gain.setTargetAtTime(0,t,.05);const k=clamp((rpm-2300)/4200,0,1),v=active?.3:0;
+      this.eng.lo.g.gain.setTargetAtTime(v*(1-k)*(.55+thr*.45),t,.04);this.eng.hi.g.gain.setTargetAtTime(v*k*(.5+thr*.5),t,.04);
+      this.eng.lo.s.playbackRate.setTargetAtTime(clamp(rpm/2400,.5,2),t,.03);this.eng.hi.s.playbackRate.setTargetAtTime(clamp(rpm/6600,.6,1.25),t,.03)}
+    else{this.o1.frequency.setTargetAtTime(f,t,.03);this.o2.frequency.setTargetAtTime(f*.5,t,.03);this.o3.frequency.setTargetAtTime(f*1.01+1,t,.03);
+      this.f.frequency.setTargetAtTime(300+thr*1800+rpm*.25,t,.05);this.eg.gain.setTargetAtTime(active?(.07+thr*.08):0,t,.05)}
+    const gl=active&&ground?Math.min(1,spd*.025+slip*.6):0;
+    if(this.gv){this.gv.g.gain.setTargetAtTime(gl*.9,t,.05);this.gv.s.playbackRate.setTargetAtTime(.75+Math.min(.6,spd*.012),t,.1)}
+    else{this.ng.gain.setTargetAtTime(gl*.32,t,.05);this.nf.frequency.setTargetAtTime(600+spd*12,t,.1)}},
+  play(n,gain=1,rate=1){if(!this.ctx)return false;const vars=[n,n+'1',n+'2'].filter(k=>this.buf[k]);if(!vars.length)return false;
+    const now=this.ctx.currentTime;if(this.last[n]&&now-this.last[n]<.15)return true;this.last[n]=now;
+    const s=this.ctx.createBufferSource(),g=this.ctx.createGain();s.buffer=this.buf[vars[Math.floor(Math.random()*vars.length)]];s.playbackRate.value=rate*(.94+Math.random()*.12);g.gain.value=gain;s.connect(g).connect(this.master);s.start();return true},
   burst(gain,freq,dur){if(!this.ctx)return;const x=this.ctx,s=x.createBufferSource();s.buffer=this.noise;const f=x.createBiquadFilter();f.type='lowpass';f.frequency.value=freq;const g=x.createGain();
     g.gain.setValueAtTime(gain,x.currentTime);g.gain.exponentialRampToValueAtTime(.001,x.currentTime+dur);s.connect(f).connect(g).connect(this.master);s.start();s.stop(x.currentTime+dur)},
-  crash(v){this.burst(Math.min(.9,.2+v*.05),900,.35)},
-  metal(v){if(!this.ctx)return;this.burst(Math.min(.7,.15+v*.04),5200,.28);const x=this.ctx,o=x.createOscillator(),g=x.createGain();o.type='triangle';o.frequency.value=780+Math.random()*300;
-    g.gain.setValueAtTime(Math.min(.25,.05+v*.015),x.currentTime);g.gain.exponentialRampToValueAtTime(.001,x.currentTime+.45);o.connect(g).connect(this.master);o.start();o.stop(x.currentTime+.5)},thud(v){this.burst(Math.min(.8,.25+v*.08),220,.3)},
+  crash(v){if(!this.play('crash',Math.min(1.1,.25+v*.04)))this.burst(Math.min(.9,.2+v*.05),900,.35)},
+  metal(v){if(this.play('metal',Math.min(1,.25+v*.035)))return;if(!this.ctx)return;this.burst(Math.min(.7,.15+v*.04),5200,.28);const x=this.ctx,o=x.createOscillator(),g=x.createGain();o.type='triangle';o.frequency.value=780+Math.random()*300;
+    g.gain.setValueAtTime(Math.min(.25,.05+v*.015),x.currentTime);g.gain.exponentialRampToValueAtTime(.001,x.currentTime+.45);o.connect(g).connect(this.master);o.start();o.stop(x.currentTime+.5)},
+  thud(v){if(!this.play('land',Math.min(1.1,.3+v*.12)))this.burst(Math.min(.8,.25+v*.08),220,.3)},
+  shift(thr){if(thr>.7&&Math.random()<.55)this.play('backfire',.45)},
+  pop(){this.play('puncture',.9)||this.burst(.6,2500,.25)},
+  clatter(){this.play('part',.7)},
+  cheer(d){this.play('crowd',clamp(1.1-d/90,.15,.9))},
   beep(hi){if(!this.ctx)return;const x=this.ctx,o=x.createOscillator(),g=x.createGain();o.type='square';o.frequency.value=hi?1320:660;g.gain.setValueAtTime(.18,x.currentTime);g.gain.exponentialRampToValueAtTime(.001,x.currentTime+(hi?.6:.25));o.connect(g).connect(this.master);o.start();o.stop(x.currentTime+.6)}
 };
 
@@ -953,6 +979,7 @@ function startStage(stage,rally){
   sfx.init();pilot.stop();G.rally=!!rally;
   if(!world||G.stage!==stage){buildWorld(stage)}
   for(const o of debris.children)o.visible=false;debrisList.length=0;
+  if(T.crowds)for(const cr of T.crowds)cr.cheered=0;
   if(!G.rally){car.D=freshDamage();carVis.resetBody()}
   G.stage=stage;G.mode='countdown';G.cd=3.999;G.time=0;G.nextNote=0;G.called=[];G.splits=[];G.splitIdx=0;G.finT=0;G.lastCd=4;G.penalty=0;
   placeCar(T.startS-14);G.camInit=true;
@@ -1113,7 +1140,7 @@ function updCamera(dt){
 /* ===================== kibice: animacja ===================== */
 const _m4=new THREE.Matrix4(),_ps=new THREE.Vector3(),_sc=new THREE.Vector3(),_q=new THREE.Quaternion();
 function updCrowd(now){const W=world&&world.crowd;if(!W||!T.crowds)return;let ch=false;
-  for(const cr of T.crowds){const d=Math.abs(cr.s-car.s),ex=G.mode==='racing'||G.mode==='finished'?clamp(1-d/110,0,1):0;if(!ex&&!cr.dirty)continue;cr.dirty=ex>0;ch=true;
+  for(const cr of T.crowds){const d=Math.abs(cr.s-car.s);if(G.mode==='racing'&&d<55&&!cr.cheered){cr.cheered=1;sfx.cheer(d)}const ex=G.mode==='racing'||G.mode==='finished'?clamp(1-d/110,0,1):0;if(!ex&&!cr.dirty)continue;cr.dirty=ex>0;ch=true;
     for(let k=cr.i0;k<cr.i0+cr.n;k++){const p=W.ppl[k],j=ex*Math.max(0,Math.sin(now*.011+p.ph))*.3;_ps.set(p.x,p.y+j,p.z);_sc.set(1,p.h,1);_m4.compose(_ps,_q,_sc);W.body.setMatrixAt(k,_m4);W.head.setMatrixAt(k,_m4)}}
   if(ch){W.body.instanceMatrix.needsUpdate=true;W.head.instanceMatrix.needsUpdate=true}}
 
